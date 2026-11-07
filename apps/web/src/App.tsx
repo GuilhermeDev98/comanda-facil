@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { Utensils, ClipboardList, ChefHat, CreditCard, Settings, Plus, Search, Bell, CircleCheck, Clock3, Users, TrendingUp } from "lucide-react";
+import { Utensils, ClipboardList, ChefHat, CreditCard, Settings, Plus, Bell, CircleCheck, Clock3, Users, TrendingUp } from "lucide-react";
 
 const apiUrl = import.meta.env.VITE_API_URL ?? "http://localhost:3333";
 type Health = "checking" | "online" | "offline";
