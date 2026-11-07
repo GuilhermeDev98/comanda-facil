@@ -37,6 +37,23 @@ app.get("/api/categories", asyncRoute(async (_req, res) => {
   res.json(categories);
 }));
 
+app.post("/api/products", asyncRoute(async (req, res) => {
+  const input = z.object({
+    name: z.string().trim().min(2).max(100),
+    categoryId: z.string().uuid(),
+    priceCents: z.number().int().min(0).max(100000000),
+    description: z.string().trim().max(300).optional()
+  }).parse(req.body);
+  const category = await prisma.category.findUnique({ where: { id: input.categoryId } });
+  if (!category || !category.active) { res.status(400).json({ error: "invalid_category", message: "Selecione uma categoria válida." }); return; }
+  const product = await prisma.product.create({
+    data: { name: input.name, categoryId: input.categoryId, priceCents: input.priceCents, description: input.description },
+    include: { category: true }
+  });
+  broadcast("product.created", product);
+  res.status(201).json(product);
+}));
+
 app.get("/api/products", asyncRoute(async (req, res) => {
   const categoryId = typeof req.query.categoryId === "string" ? req.query.categoryId : undefined;
   const products = await prisma.product.findMany({
@@ -92,20 +109,36 @@ app.post("/api/tabs", asyncRoute(async (req, res) => {
 }));
 
 app.post("/api/tabs/:tabId/items", asyncRoute(async (req, res) => {
-  const input = z.object({ productId: z.string().uuid(), quantity: z.number().int().min(1).max(99).default(1), notes: z.string().trim().max(300).optional() }).parse(req.body);
-  const [tab, product] = await Promise.all([
-    prisma.tab.findUnique({ where: { id: String(req.params.tabId) } }),
-    prisma.product.findUnique({ where: { id: input.productId }, include: { category: true } })
-  ]);
+  const input = z.object({
+    productId: z.string().uuid().optional(),
+    productName: z.string().trim().min(2).max(120).optional(),
+    unitPriceCents: z.number().int().min(0).max(100000000).optional(),
+    station: z.enum(["BAR", "COZINHA"]).optional(),
+    quantity: z.number().int().min(1).max(99).default(1),
+    notes: z.string().trim().max(300).optional()
+  }).parse(req.body);
+  const tab = await prisma.tab.findUnique({ where: { id: String(req.params.tabId) } });
   if (!tab || tab.status !== "ABERTA") { res.status(404).json({ error: "tab_not_open" }); return; }
-  if (!product || !product.available) { res.status(404).json({ error: "product_unavailable" }); return; }
-  const item = await prisma.orderItem.create({
-    data: {
+
+  let itemData: Prisma.OrderItemUncheckedCreateInput;
+  if (input.productId) {
+    const product = await prisma.product.findUnique({ where: { id: input.productId }, include: { category: true } });
+    if (!product || !product.available) { res.status(404).json({ error: "product_unavailable" }); return; }
+    itemData = {
       tabId: tab.id, productId: product.id, productName: product.name,
       quantity: input.quantity, unitPriceCents: product.priceCents,
       station: product.category.station, notes: input.notes
+    };
+  } else {
+    if (!input.productName || input.unitPriceCents === undefined || !input.station) {
+      res.status(400).json({ error: "invalid_custom_item", message: "Informe nome, preço e setor para o produto avulso." }); return;
     }
-  });
+    itemData = {
+      tabId: tab.id, productName: input.productName, quantity: input.quantity,
+      unitPriceCents: input.unitPriceCents, station: input.station, notes: input.notes
+    };
+  }
+  const item = await prisma.orderItem.create({ data: itemData });
   broadcast("tab.item.created", { tabId: tab.id, item });
   res.status(201).json(item);
 }));
