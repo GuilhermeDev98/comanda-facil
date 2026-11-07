@@ -1,55 +1,40 @@
-import { useEffect, useState } from "react";
-import { Utensils, ClipboardList, ChefHat, CreditCard, Settings, Plus, Bell, CircleCheck, Clock3, Users, TrendingUp } from "lucide-react";
+import { useCallback, useEffect, useMemo, useState } from "react";
+import { Utensils, ClipboardList, ChefHat, CreditCard, Settings, Plus, Bell, Search, X, RefreshCw, Trash2, Minus } from "lucide-react";
 
 const apiUrl = import.meta.env.VITE_API_URL ?? "http://localhost:3333";
-type Health = "checking" | "online" | "offline";
+type Product = { id:string; name:string; priceCents:number; categoryId:string; category:{name:string;station:"BAR"|"COZINHA"} };
+type Category = { id:string; name:string; station:"BAR"|"COZINHA"; products:Product[] };
+type Item = {id:string;productName:string;quantity:number;unitPriceCents:number;status:string;station:string};
+type Tab = {id:string;code:number;kind:"MESA"|"INDIVIDUAL";customerName?:string|null;table?:{number:number}|null;items:Item[];payments?:{amountCents:number}[]};
+type KitchenItem = Item & {tab:{code:number;table?:{number:number}|null;customerName?:string|null}};
+const money=(n:number)=>(n/100).toLocaleString("pt-BR",{style:"currency",currency:"BRL"});
+const sum=(items:Item[])=>(items||[]).reduce((s,i)=>s+i.quantity*i.unitPriceCents,0);
 
-export default function App() {
-  const [health, setHealth] = useState<Health>("checking");
-  const [tab, setTab] = useState("Visão geral");
-  useEffect(() => {
-    fetch(`${apiUrl}/health`).then(r => { if (!r.ok) throw new Error(); return r.json(); })
-      .then(() => setHealth("online")).catch(() => setHealth("offline"));
-  }, []);
-
-  const nav = [
-    { label: "Visão geral", icon: TrendingUp }, { label: "Comandas", icon: ClipboardList },
-    { label: "Cozinha e bar", icon: ChefHat }, { label: "Cardápio", icon: Utensils },
-    { label: "Pagamentos", icon: CreditCard }, { label: "Configurações", icon: Settings },
-  ];
-  return <div className="shell">
-    <aside className="sidebar">
-      <div className="brand"><div className="brand-icon"><Utensils size={21}/></div><div><strong>Comanda Fácil</strong><small>PAINEL DO ESTABELECIMENTO</small></div></div>
-      <div className="workspace"><span className="avatar">B</span><div><b>Meu estabelecimento</b><small>Plano inicial</small></div><span className="chevron">⌄</span></div>
-      <span className="section-label">MENU PRINCIPAL</span>
-      <nav>{nav.map(n => <button key={n.label} className={tab===n.label?"nav-item active":"nav-item"} onClick={()=>setTab(n.label)}><n.icon size={18}/>{n.label}</button>)}</nav>
-      <div className="sidebar-bottom"><div className="user"><span className="avatar user-avatar">G</span><div><b>Administrador</b><small>Perfil administrador</small></div><span className="chevron">···</span></div></div>
-    </aside>
-    <main className="main">
-      <header className="topbar"><div className="crumb">Estabelecimento <span>/</span> {tab}</div><div className="top-actions"><span className={health==="online"?"status online":"status"}><i/>API {health==="checking"?"verificando":health==="online"?"conectada":"desconectada"}</span><button className="icon-btn" aria-label="Notificações"><Bell size={19}/></button><span className="avatar top-avatar">G</span></div></header>
-      <div className="content">
-        <div className="heading"><div><p className="eyebrow">SEXTA-FEIRA, OPERAÇÃO DO DIA</p><h1>{tab}</h1><p className="subtitle">Acompanhe a operação do seu bar em tempo real.</p></div><button className="primary"><Plus size={18}/> Nova comanda</button></div>
-        <section className="metrics">
-          <Metric title="Comandas abertas" value="0" note="Nenhuma em andamento" icon={<ClipboardList/>}/>
-          <Metric title="Pedidos em preparo" value="0" note="Cozinha e bar" icon={<ChefHat/>}/>
-          <Metric title="Vendas do dia" value="R$ 0,00" note="Atualizado agora" icon={<TrendingUp/>}/>
-          <Metric title="Clientes atendidos" value="0" note="No dia de hoje" icon={<Users/>}/>
-        </section>
-        <section className="quick-grid">
-          <div className="panel orders"><div className="panel-head"><div><h2>Comandas recentes</h2><p>Últimas movimentações do estabelecimento</p></div><button className="text-btn" onClick={()=>setTab("Comandas")}>Ver todas <span>→</span></button></div>
-            <div className="empty"><div className="empty-icon"><ClipboardList size={25}/></div><b>Nenhuma comanda por enquanto</b><p>Quando uma comanda for aberta, ela aparecerá aqui.</p><button className="outline" onClick={()=>setTab("Comandas")}><Plus size={16}/> Abrir primeira comanda</button></div>
-          </div>
-          <div className="panel activity"><div className="panel-head"><div><h2>Visão da operação</h2><p>Status das estações</p></div></div>
-            <div className="station"><span className="station-icon"><ChefHat size={18}/></span><div><b>Cozinha</b><small>Fila de preparo</small></div><span className="count">0 pedidos</span></div>
-            <div className="station"><span className="station-icon bar"><Utensils size={18}/></span><div><b>Bar</b><small>Fila de preparo</small></div><span className="count">0 pedidos</span></div>
-            <div className="operation-note"><CircleCheck size={17}/><span>Pronto para iniciar o atendimento</span></div>
-          </div>
-        </section>
-        <div className="footer-note"><Clock3 size={14}/> Os dados serão exibidos assim que a API e o banco forem configurados.</div>
-      </div>
-    </main>
-  </div>;
+export default function App(){
+ const [health,setHealth]=useState("checking"),[page,setPage]=useState("Visão geral"),[categories,setCategories]=useState<Category[]>([]),[tabs,setTabs]=useState<Tab[]>([]),[selected,setSelected]=useState(""),[categoryId,setCategoryId]=useState("all"),[search,setSearch]=useState(""),[showOpen,setShowOpen]=useState(false),[kind,setKind]=useState<"MESA"|"INDIVIDUAL">("MESA"),[tableNumber,setTableNumber]=useState("1"),[customerName,setCustomerName]=useState(""),[error,setError]=useState(""),[busy,setBusy]=useState(false),[kitchen,setKitchen]=useState<KitchenItem[]>([]);
+ const request=useCallback(async(path:string,options?:RequestInit)=>{const r=await fetch(apiUrl+path,{...options,headers:{"Content-Type":"application/json",...options?.headers}});if(!r.ok){const b=await r.json().catch(()=>({}));throw new Error(b.message||b.error||"Falha na operação");}return r.status===204?null:r.json();},[]);
+ const load=useCallback(async()=>{try{const [h,c,t]=await Promise.all([fetch(apiUrl+"/health"),request("/api/categories"),request("/api/tabs")]);setHealth(h.ok?"online":"offline");setCategories(c);setTabs(t);}catch{setHealth("offline");}},[request]);
+ const loadKitchen=useCallback(async()=>{try{setKitchen(await request("/api/kitchen"));}catch{setError("Não foi possível carregar os pedidos.");}},[request]);
+ useEffect(()=>{void load();},[load]);useEffect(()=>{if(page==="Cozinha e bar")void loadKitchen();},[page,loadKitchen]);
+ const active=tabs.find(t=>t.id===selected)||null;
+ const products=useMemo(()=>categories.flatMap(c=>c.products).filter(p=>(categoryId==="all"||p.categoryId===categoryId)&&p.name.toLowerCase().includes(search.toLowerCase())),[categories,categoryId,search]);
+ async function openTab(e:React.FormEvent){e.preventDefault();setBusy(true);setError("");try{const t=await request("/api/tabs",{method:"POST",body:JSON.stringify({kind,...(kind==="MESA"?{tableNumber:Number(tableNumber)}:{customerName})})});await load();setSelected(t.id);setShowOpen(false);setPage("Comandas");}catch(x){setError(x instanceof Error?x.message:"Erro ao abrir comanda");}finally{setBusy(false);}}
+ async function addProduct(p:Product){if(!active){setError("Selecione uma comanda antes de adicionar produtos.");return;}setBusy(true);try{await request("/api/tabs/"+active.id+"/items",{method:"POST",body:JSON.stringify({productId:p.id,quantity:1})});await load();}catch(x){setError(x instanceof Error?x.message:"Erro ao adicionar produto");}finally{setBusy(false);}}
+ async function quantity(item:Item,n:number){if(!active||n<1)return;try{await request("/api/tabs/"+active.id+"/items/"+item.id,{method:"PATCH",body:JSON.stringify({quantity:n})});await load();}catch(x){setError(x instanceof Error?x.message:"Erro ao alterar quantidade");}}
+ async function remove(item:Item){if(!active)return;try{await request("/api/tabs/"+active.id+"/items/"+item.id,{method:"DELETE"});await load();}catch(x){setError(x instanceof Error?x.message:"Erro ao remover item");}}
+ async function kitchenStatus(item:KitchenItem,status:"EM_PREPARO"|"PRONTO"|"ENTREGUE"){try{await request("/api/order-items/"+item.id+"/status",{method:"PATCH",body:JSON.stringify({status})});await loadKitchen();}catch(x){setError(x instanceof Error?x.message:"Erro ao atualizar pedido");}}
+ const nav=[{label:"Visão geral",icon:ClipboardList},{label:"Comandas",icon:ClipboardList},{label:"Cozinha e bar",icon:ChefHat},{label:"Cardápio",icon:Utensils},{label:"Pagamentos",icon:CreditCard},{label:"Configurações",icon:Settings}];
+ return <div className="shell"><aside className="sidebar"><div className="brand"><div className="brand-icon"><Utensils/></div><div><strong>Comanda Fácil</strong><small>PAINEL DO ESTABELECIMENTO</small></div></div><div className="workspace"><b>Boteco da Alagoana</b><small>Cardápio cadastrado</small></div><span className="section-label">MENU PRINCIPAL</span><nav>{nav.map(n=><button key={n.label} className={page===n.label?"nav-item active":"nav-item"} onClick={()=>{setPage(n.label);setError("");}}><n.icon size={18}/>{n.label}</button>)}</nav></aside>
+ <main className="main"><header className="topbar"><span>Boteco da Alagoana / {page}</span><span className={"status "+health}>● API {health}</span></header><div className="content">
+ {error&&<div className="error-banner">{error}<button onClick={()=>setError("")}><X size={15}/></button></div>}
+ {page==="Visão geral"&&<><div className="heading"><div><p className="eyebrow">OPERAÇÃO DO DIA</p><h1>Visão geral</h1><p className="subtitle">Acompanhe a operação do seu bar.</p></div><button className="primary" onClick={()=>setShowOpen(true)}><Plus/> Nova comanda</button></div><section className="metrics"><Metric title="Comandas abertas" value={String(tabs.length)}/><Metric title="Pedidos em preparo" value={String(kitchen.filter(i=>i.status==="EM_PREPARO").length)}/><Metric title="Saldo em aberto" value={money(tabs.reduce((s,t)=>s+sum(t.items)-(t.payments||[]).reduce((a,p)=>a+p.amountCents,0),0))}/><Metric title="Itens lançados" value={String(tabs.reduce((s,t)=>s+t.items.reduce((a,i)=>a+i.quantity,0),0))}/></section><section className="panel"><div className="panel-head"><h2>Comandas recentes</h2><button className="text-btn" onClick={()=>setPage("Comandas")}>Ver todas →</button></div>{tabs.length===0?<div className="empty"><b>Nenhuma comanda aberta</b><button className="outline" onClick={()=>setShowOpen(true)}>+ Abrir primeira comanda</button></div>:tabs.slice(0,5).map(t=><TabRow key={t.id} tab={t} selected={selected===t.id} onClick={()=>{setSelected(t.id);setPage("Comandas");}}/>)}</section></>}
+ {page==="Comandas"&&<><div className="heading"><div><p className="eyebrow">ATENDIMENTO</p><h1>Comandas</h1><p className="subtitle">Abra comandas e lance os produtos consumidos.</p></div><button className="primary" onClick={()=>setShowOpen(true)}><Plus/> Nova comanda</button></div><div className="orders-layout"><section className="panel"><h2>Em andamento ({tabs.length})</h2>{tabs.length===0?<div className="empty">Nenhuma comanda aberta.</div>:tabs.map(t=><TabRow key={t.id} tab={t} selected={selected===t.id} onClick={()=>setSelected(t.id)}/>)}</section><section className="panel">{active?<><div className="panel-head"><div><h2>Comanda #{active.code}</h2><small>{active.kind==="MESA"?"Mesa "+active.table?.number:active.customerName}</small></div><button className="text-btn" onClick={()=>setSelected("")}>Fechar</button></div>{active.items.map(i=><div className="order-item" key={i.id}><div className="item-main"><b>{i.productName}</b><small>{money(i.unitPriceCents)} cada</small></div><div className="qty"><button onClick={()=>quantity(i,i.quantity-1)}><Minus size={13}/></button>{i.quantity}<button onClick={()=>quantity(i,i.quantity+1)}><Plus size={13}/></button></div><b>{money(i.quantity*i.unitPriceCents)}</b><button className="remove" onClick={()=>remove(i)}><Trash2 size={15}/></button></div>)}<div className="order-total"><span>Total</span><strong>{money(sum(active.items))}</strong></div><button className="outline full" onClick={()=>setPage("Cardápio")}>+ Adicionar produtos</button></>:<div className="empty">Selecione uma comanda para visualizar os itens.</div>}</section></div></>}
+ {page==="Cardápio"&&<><div className="heading"><div><p className="eyebrow">PRODUTOS CADASTRADOS</p><h1>Cardápio</h1><p className="subtitle">{categories.reduce((s,c)=>s+c.products.length,0)} produtos disponíveis.</p></div><button className="outline" onClick={()=>void load()}><RefreshCw/> Atualizar</button></div>{!active&&<div className="info-banner">Selecione uma comanda para lançar produtos. <button onClick={()=>setPage("Comandas")}>Ir para comandas</button></div>}<div className="catalog-toolbar"><div className="searchbox"><Search/><input placeholder="Buscar produto..." value={search} onChange={e=>setSearch(e.target.value)}/></div><div className="category-chips"><button className={categoryId==="all"?"chip selected":"chip"} onClick={()=>setCategoryId("all")}>Todos</button>{categories.map(c=><button key={c.id} className={categoryId===c.id?"chip selected":"chip"} onClick={()=>setCategoryId(c.id)}>{c.name}</button>)}</div></div><div className="product-grid">{products.map(p=><article className="product-card" key={p.id}><div><span className="station-tag">{p.category.station}</span><h3>{p.name}</h3><small>{p.category.name}</small></div><div className="product-bottom"><strong>{money(p.priceCents)}</strong><button className="add-product" disabled={!active||busy} onClick={()=>void addProduct(p)}><Plus/></button></div></article>)}</div></>}
+ {page==="Cozinha e bar"&&<><div className="heading"><div><p className="eyebrow">PRODUÇÃO</p><h1>Cozinha e bar</h1><p className="subtitle">Atualize o andamento dos pedidos.</p></div><button className="outline" onClick={()=>void loadKitchen()}><RefreshCw/> Atualizar</button></div><div className="kitchen-grid">{(["RECEBIDO","EM_PREPARO","PRONTO"] as const).map(s=><section className="panel" key={s}><h2>{s==="RECEBIDO"?"Recebidos":s==="EM_PREPARO"?"Em preparo":"Prontos"}</h2>{kitchen.filter(i=>i.status===s).map(i=><div className="kitchen-item" key={i.id}><b>{i.quantity}x {i.productName}</b><small>Comanda #{i.tab.code} · {i.tab.table?"Mesa "+i.tab.table.number:i.tab.customerName}</small><button onClick={()=>void kitchenStatus(i,s==="RECEBIDO"?"EM_PREPARO":s==="EM_PREPARO"?"PRONTO":"ENTREGUE")}>{s==="RECEBIDO"?"Iniciar preparo":s==="EM_PREPARO"?"Marcar pronto":"Entregue"}</button></div>)}</section>)}</div></>}
+ {page==="Pagamentos"&&<section className="panel placeholder"><h1>Pagamentos</h1><p>O recebimento PIX, dinheiro e cartão e a divisão da conta ainda serão implementados.</p></section>}
+ {page==="Configurações"&&<section className="panel placeholder"><h1>Configurações</h1><p>Cadastro de usuários, permissões e mesas será implementado na próxima etapa.</p></section>}
+ </div></main>
+ {showOpen&&<div className="modal-backdrop" onClick={()=>setShowOpen(false)}><form className="modal" onSubmit={openTab} onClick={e=>e.stopPropagation()}><div className="modal-head"><div><h2>Abrir comanda</h2><p>Escolha o tipo de atendimento.</p></div><button type="button" className="icon-btn" onClick={()=>setShowOpen(false)}><X/></button></div><label>Tipo de comanda</label><div className="kind-switch"><button type="button" className={kind==="MESA"?"kind active":"kind"} onClick={()=>setKind("MESA")}>Por mesa</button><button type="button" className={kind==="INDIVIDUAL"?"kind active":"kind"} onClick={()=>setKind("INDIVIDUAL")}>Individual</button></div>{kind==="MESA"?<><label>Número da mesa</label><input className="field" type="number" min="1" value={tableNumber} onChange={e=>setTableNumber(e.target.value)} required/></>:<><label>Nome do cliente</label><input className="field" value={customerName} onChange={e=>setCustomerName(e.target.value)} required placeholder="Nome do cliente"/></>}<button className="primary submit" disabled={busy}>{busy?"Abrindo...":"Abrir comanda"}</button></form></div>}</div>;
 }
-function Metric({title,value,note,icon}:{title:string;value:string;note:string;icon:React.ReactNode}) {
-  return <article className="metric"><div className="metric-top"><span>{title}</span><i>{icon}</i></div><strong>{value}</strong><small>{note}</small></article>;
-}
+function Metric({title,value}:{title:string;value:string}){return <article className="metric"><span>{title}</span><strong>{value}</strong></article>;}
+function TabRow({tab,selected,onClick}:{tab:Tab;selected:boolean;onClick:()=>void}){return <button className={selected?"tab-row selected":"tab-row"} onClick={onClick}><b>#{tab.code} · {tab.kind==="MESA"?"Mesa "+tab.table?.number:tab.customerName}</b><span>{tab.items.reduce((s,i)=>s+i.quantity,0)} itens</span><strong>{money(sum(tab.items))}</strong></button>;}
