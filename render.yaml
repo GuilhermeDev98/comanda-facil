@@ -11,7 +11,7 @@ services:
     plan: free
     region: virginia
     buildCommand: npm install --no-audit --no-fund && npm run db:generate --workspace @comanda-facil/api && npm run build --workspace @comanda-facil/api
-    startCommand: npm run db:migrate --workspace @comanda-facil/api && npm run start --workspace @comanda-facil/api
+    startCommand: npm run db:sync --workspace @comanda-facil/api && npm run db:seed --workspace @comanda-facil/api && npm run start --workspace @comanda-facil/api
     healthCheckPath: /health
     autoDeployTrigger: commit
     envVars:
