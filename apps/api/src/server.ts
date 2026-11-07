@@ -94,7 +94,7 @@ app.post("/api/tabs", asyncRoute(async (req, res) => {
 app.post("/api/tabs/:tabId/items", asyncRoute(async (req, res) => {
   const input = z.object({ productId: z.string().uuid(), quantity: z.number().int().min(1).max(99).default(1), notes: z.string().trim().max(300).optional() }).parse(req.body);
   const [tab, product] = await Promise.all([
-    prisma.tab.findUnique({ where: { id: req.params.tabId } }),
+    prisma.tab.findUnique({ where: { id: String(req.params.tabId) } }),
     prisma.product.findUnique({ where: { id: input.productId }, include: { category: true } })
   ]);
   if (!tab || tab.status !== "ABERTA") { res.status(404).json({ error: "tab_not_open" }); return; }
@@ -112,7 +112,7 @@ app.post("/api/tabs/:tabId/items", asyncRoute(async (req, res) => {
 
 app.patch("/api/tabs/:tabId/items/:itemId", asyncRoute(async (req, res) => {
   const input = z.object({ quantity: z.number().int().min(1).max(99) }).parse(req.body);
-  const item = await prisma.orderItem.findFirst({ where: { id: req.params.itemId, tabId: req.params.tabId, status: "RECEBIDO" } });
+  const item = await prisma.orderItem.findFirst({ where: { id: String(req.params.itemId), tabId: String(req.params.tabId), status: "RECEBIDO" } });
   if (!item) { res.status(404).json({ error: "item_not_editable" }); return; }
   const updated = await prisma.orderItem.update({ where: { id: item.id }, data: { quantity: input.quantity } });
   broadcast("tab.item.updated", updated);
@@ -120,10 +120,10 @@ app.patch("/api/tabs/:tabId/items/:itemId", asyncRoute(async (req, res) => {
 }));
 
 app.delete("/api/tabs/:tabId/items/:itemId", asyncRoute(async (req, res) => {
-  const item = await prisma.orderItem.findFirst({ where: { id: req.params.itemId, tabId: req.params.tabId, status: "RECEBIDO" } });
+  const item = await prisma.orderItem.findFirst({ where: { id: String(req.params.itemId), tabId: String(req.params.tabId), status: "RECEBIDO" } });
   if (!item) { res.status(404).json({ error: "item_not_removable" }); return; }
   await prisma.orderItem.delete({ where: { id: item.id } });
-  broadcast("tab.item.deleted", { tabId: req.params.tabId, itemId: item.id });
+  broadcast("tab.item.deleted", { tabId: String(req.params.tabId), itemId: item.id });
   res.status(204).end();
 }));
 
@@ -137,7 +137,7 @@ app.get("/api/kitchen", asyncRoute(async (_req, res) => {
 
 app.patch("/api/order-items/:itemId/status", asyncRoute(async (req, res) => {
   const input = z.object({ status: z.enum(["EM_PREPARO", "PRONTO", "ENTREGUE"]) }).parse(req.body);
-  const item = await prisma.orderItem.update({ where: { id: req.params.itemId }, data: { status: input.status } });
+  const item = await prisma.orderItem.update({ where: { id: String(req.params.itemId) }, data: { status: input.status } });
   broadcast("kitchen.item.updated", item);
   res.json(item);
 }));
