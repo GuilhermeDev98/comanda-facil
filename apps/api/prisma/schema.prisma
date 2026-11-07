@@ -1,0 +1,141 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+enum Role { ADMIN ATENDENTE COZINHA }
+enum Station { COZINHA BAR }
+enum TabKind { MESA INDIVIDUAL }
+enum TabStatus { ABERTA FECHADA CANCELADA MESCLADA }
+enum ItemStatus { RECEBIDO EM_PREPARO PRONTO ENTREGUE CANCELADO }
+enum PaymentMethod { DINHEIRO CARTAO PIX }
+
+model User {
+  id           String   @id @default(uuid()) @db.Uuid
+  name         String
+  email        String   @unique
+  passwordHash String   @map("password_hash")
+  active       Boolean  @default(true)
+  roles        UserRole[]
+  openedTabs   Tab[]    @relation("TabOpenedBy")
+  createdAt    DateTime @default(now()) @map("created_at")
+  updatedAt    DateTime @updatedAt @map("updated_at")
+  @@map("users")
+}
+
+model UserRole {
+  id     String @id @default(uuid()) @db.Uuid
+  userId String @map("user_id") @db.Uuid
+  role   Role
+  user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+  @@unique([userId, role])
+  @@map("user_roles")
+}
+
+model DiningTable {
+  id        String @id @default(uuid()) @db.Uuid
+  number    Int    @unique
+  label     String?
+  seats     Int    @default(4)
+  active    Boolean @default(true)
+  tabs      Tab[]
+  createdAt DateTime @default(now()) @map("created_at")
+  @@map("dining_tables")
+}
+
+model Category {
+  id        String   @id @default(uuid()) @db.Uuid
+  name      String
+  station   Station  @default(COZINHA)
+  sortOrder Int      @default(0) @map("sort_order")
+  active    Boolean  @default(true)
+  products  Product[]
+  createdAt DateTime @default(now()) @map("created_at")
+  @@map("categories")
+}
+
+model Product {
+  id          String   @id @default(uuid()) @db.Uuid
+  categoryId  String   @map("category_id") @db.Uuid
+  category    Category @relation(fields: [categoryId], references: [id], onDelete: Restrict)
+  name        String
+  description String?
+  priceCents  Int      @map("price_cents")
+  imageUrl    String?  @map("image_url")
+  available   Boolean  @default(true)
+  addons      Json     @default("[]")
+  items       OrderItem[]
+  createdAt   DateTime @default(now()) @map("created_at")
+  updatedAt   DateTime @updatedAt @map("updated_at")
+  @@index([categoryId])
+  @@map("products")
+}
+
+model Tab {
+  id           String    @id @default(uuid()) @db.Uuid
+  code         Int       @unique @default(autoincrement())
+  kind         TabKind
+  status       TabStatus @default(ABERTA)
+  tableId      String?   @map("table_id") @db.Uuid
+  table        DiningTable? @relation(fields: [tableId], references: [id], onDelete: Restrict)
+  customerName String?   @map("customer_name")
+  openedById   String?   @map("opened_by_id") @db.Uuid
+  openedBy     User?     @relation("TabOpenedBy", fields: [openedById], references: [id], onDelete: SetNull)
+  openedAt     DateTime  @default(now()) @map("opened_at")
+  closedAt     DateTime? @map("closed_at")
+  cancelReason String?   @map("cancel_reason")
+  items        OrderItem[]
+  payments     Payment[]
+  createdAt    DateTime  @default(now()) @map("created_at")
+  @@index([status, openedAt])
+  @@map("tabs")
+}
+
+model OrderItem {
+  id             String     @id @default(uuid()) @db.Uuid
+  tabId          String     @map("tab_id") @db.Uuid
+  tab            Tab        @relation(fields: [tabId], references: [id], onDelete: Restrict)
+  productId      String?    @map("product_id") @db.Uuid
+  product        Product?   @relation(fields: [productId], references: [id], onDelete: SetNull)
+  productName    String     @map("product_name")
+  quantity       Int        @default(1)
+  unitPriceCents Int        @map("unit_price_cents")
+  addons         Json       @default("[]")
+  notes          String?
+  station        Station
+  status         ItemStatus @default(RECEBIDO)
+  createdAt      DateTime   @default(now()) @map("created_at")
+  @@index([station, status, createdAt])
+  @@map("order_items")
+}
+
+model Payment {
+  id             String        @id @default(uuid()) @db.Uuid
+  tabId          String        @map("tab_id") @db.Uuid
+  tab            Tab           @relation(fields: [tabId], references: [id], onDelete: Restrict)
+  method         PaymentMethod
+  amountCents    Int           @map("amount_cents")
+  idempotencyKey String        @unique @map("idempotency_key")
+  note           String?
+  voidedAt       DateTime?     @map("voided_at")
+  voidReason     String?       @map("void_reason")
+  createdAt      DateTime      @default(now()) @map("created_at")
+  @@index([tabId, createdAt])
+  @@map("payments")
+}
+
+model AuditLog {
+  id         String   @id @default(uuid()) @db.Uuid
+  actorId    String?  @map("actor_id") @db.Uuid
+  action     String
+  entityType String   @map("entity_type")
+  entityId   String?  @map("entity_id") @db.Uuid
+  metadata   Json     @default("{}")
+  createdAt  DateTime @default(now()) @map("created_at")
+  @@index([entityType, entityId, createdAt])
+  @@map("audit_logs")
+}
