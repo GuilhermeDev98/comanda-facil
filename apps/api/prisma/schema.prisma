@@ -7,12 +7,12 @@ datasource db {
   url      = env("DATABASE_URL")
 }
 
-enum Role { ADMIN ATENDENTE COZINHA }
-enum Station { COZINHA BAR }
-enum TabKind { MESA INDIVIDUAL }
-enum TabStatus { ABERTA FECHADA CANCELADA MESCLADA }
-enum ItemStatus { RECEBIDO EM_PREPARO PRONTO ENTREGUE CANCELADO }
-enum PaymentMethod { DINHEIRO CARTAO PIX }
+enum Role {\n  ADMIN\n  ATENDENTE\n  COZINHA\n}
+enum Station {\n  COZINHA\n  BAR\n}
+enum TabKind {\n  MESA\n  INDIVIDUAL\n}
+enum TabStatus {\n  ABERTA\n  FECHADA\n  CANCELADA\n  MESCLADA\n}
+enum ItemStatus {\n  RECEBIDO\n  EM_PREPARO\n  PRONTO\n  ENTREGUE\n  CANCELADO\n}
+enum PaymentMethod {\n  DINHEIRO\n  CARTAO\n  PIX\n}
 
 model User {
   id           String   @id @default(uuid()) @db.Uuid
