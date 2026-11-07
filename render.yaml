@@ -1,0 +1,35 @@
+databases:
+  - name: comanda-facil-db
+    plan: free
+    region: virginia
+    postgresMajorVersion: "18"
+
+services:
+  - type: web
+    name: comanda-facil-api
+    runtime: node
+    plan: free
+    region: virginia
+    buildCommand: npm install --no-audit --no-fund && npm run db:generate --workspace @comanda-facil/api && npm run build --workspace @comanda-facil/api
+    startCommand: npm run db:migrate --workspace @comanda-facil/api && npm run start --workspace @comanda-facil/api
+    healthCheckPath: /health
+    autoDeployTrigger: commit
+    envVars:
+      - key: DATABASE_URL
+        fromDatabase:
+          name: comanda-facil-db
+          property: connectionString
+      - key: JWT_SECRET
+        generateValue: true
+      - key: CORS_ORIGIN
+        value: https://comanda-facil.onrender.com
+
+  - type: web
+    name: comanda-facil
+    runtime: static
+    buildCommand: npm install --no-audit --no-fund && npm run build --workspace @comanda-facil/web
+    staticPublishPath: apps/web/dist
+    autoDeployTrigger: commit
+    envVars:
+      - key: VITE_API_URL
+        value: https://comanda-facil-api.onrender.com
