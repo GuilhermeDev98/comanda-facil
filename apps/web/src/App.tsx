@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
-import { Utensils, ClipboardList, ChefHat, CreditCard, Settings, Plus, Bell, Search, X, RefreshCw, Trash2, Minus } from "lucide-react";
+import { Utensils, ClipboardList, ChefHat, CreditCard, Settings, Plus, Search, X, RefreshCw, Trash2, Minus } from "lucide-react";
 
 const apiUrl = import.meta.env.VITE_API_URL ?? "http://localhost:3333";
 type Product = { id:string; name:string; priceCents:number; categoryId:string; category:{name:string;station:"BAR"|"COZINHA"} };
