@@ -32,4 +32,4 @@ services:
     autoDeployTrigger: commit
     envVars:
       - key: VITE_API_URL
-        value: https://comanda-facil-api.onrender.com
+        value: https://comanda-facil-api-cg0r.onrender.com
